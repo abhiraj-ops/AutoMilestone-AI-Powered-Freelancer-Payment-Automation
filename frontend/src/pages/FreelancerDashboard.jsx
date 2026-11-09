@@ -1,9 +1,7 @@
 import { useState } from 'react';
-import axios from 'axios';
+import api from '../lib/api';
 import AIVerifier from '../components/AIVerifier';
 import { useToast, ToastList } from '../hooks/useToast';
-
-const API = import.meta.env.VITE_API_URL || '';
 
 function milestoneBadge(status) {
   const map = {
@@ -28,9 +26,13 @@ export default function FreelancerDashboard() {
     if (e) e.preventDefault();
     const id = projectId.trim();
     if (!id) return;
+    if (!/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(id)) {
+      toast('Project ID must be a valid UUID.');
+      return;
+    }
     setLoading(true);
     try {
-      const res = await axios.get(`${API}/api/projects/${id}`);
+      const res = await api.get(`/api/projects/${encodeURIComponent(id)}`);
       setProject(res.data);
       const d = {};
       (res.data.milestones || []).forEach((m) => { d[m.id] = m.deliverable_text || ''; });
@@ -45,13 +47,17 @@ export default function FreelancerDashboard() {
 
   async function submitMilestone(milestoneId) {
     const text = (drafts[milestoneId] || '').trim();
-    if (!text) {
-      toast('Deliverable text cannot be empty.');
+    if (text.length < 10) {
+      toast('Deliverable must be at least 10 characters.');
+      return;
+    }
+    if (text.length > 20000) {
+      toast('Deliverable too long (max 20000).');
       return;
     }
     setSubmitting(milestoneId);
     try {
-      const res = await axios.post(`${API}/api/milestones/${milestoneId}/submit`, { deliverable_text: text });
+      const res = await api.post(`/api/milestones/${encodeURIComponent(milestoneId)}/submit`, { deliverable_text: text });
       setProject((prev) => ({
         ...prev,
         milestones: prev.milestones.map((m) => (m.id === milestoneId ? res.data : m)),
@@ -64,12 +70,12 @@ export default function FreelancerDashboard() {
     }
   }
 
-  function handleVerified(updatedMilestone) {
+  const handleVerified = (updated) => {
     setProject((prev) => ({
       ...prev,
-      milestones: prev.milestones.map((m) => (m.id === updatedMilestone.id ? updatedMilestone : m)),
+      milestones: prev.milestones.map((m) => (m.id === updated.id ? updated : m)),
     }));
-  }
+  };
 
   const milestones = project?.milestones || [];
 
@@ -78,23 +84,18 @@ export default function FreelancerDashboard() {
       <ToastList toasts={toasts} onDismiss={dismiss} />
       <h1 className="text-2xl font-bold text-white">Freelancer Dashboard</h1>
       <p className="mt-1 text-sm text-gray-400">Enter a project ID to view milestones, submit work, and trigger AI verification.</p>
-
       <form onSubmit={loadProject} className="mt-6 flex flex-col sm:flex-row gap-3">
         <input
           value={projectId}
           onChange={(e) => setProjectId(e.target.value)}
-          placeholder="Paste project ID (e.g. from Client Dashboard)"
+          maxLength={36}
+          placeholder="Paste project ID (UUID)"
           className="flex-1 rounded-xl border border-gray-700 bg-gray-900 px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:border-indigo-500 focus:outline-none"
         />
-        <button
-          type="submit"
-          disabled={loading || !projectId.trim()}
-          className="rounded-xl bg-indigo-600 px-6 py-3 font-semibold text-white hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
+        <button type="submit" disabled={loading || !projectId.trim()} className="rounded-xl bg-indigo-600 px-6 py-3 font-semibold text-white hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed">
           {loading ? 'Loading…' : 'Load Project'}
         </button>
       </form>
-
       {project && (
         <div className="mt-8 space-y-4">
           <div className="rounded-2xl border border-gray-800 bg-gray-900 p-6">
@@ -105,7 +106,6 @@ export default function FreelancerDashboard() {
             <p className="mt-2 text-sm text-gray-400">{project.description}</p>
             <p className="mt-3 text-xs text-gray-500">Total: ${Number(project.total_amount).toFixed(2)} · Freelancer: {project.freelancer_email}</p>
           </div>
-
           {milestones.map((m) => (
             <div key={m.id} className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -121,40 +121,33 @@ export default function FreelancerDashboard() {
                   <span className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-bold text-white">✓ Paid ${Number(m.amount).toFixed(2)}</span>
                 )}
               </div>
-
               {m.deliverable_text && (
                 <div className="mt-4 rounded-xl bg-gray-950 border border-gray-800 p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Latest deliverable</p>
                   <p className="text-sm text-gray-300 whitespace-pre-wrap">{m.deliverable_text}</p>
                 </div>
               )}
-
               {m.ai_feedback && (
                 <div className="mt-3 rounded-xl bg-gray-950 border border-gray-800 p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">AI Feedback</p>
                   <p className="text-sm text-gray-300">{m.ai_feedback}</p>
                 </div>
               )}
-
               {m.status === 'pending' && (
                 <div className="mt-4 space-y-3">
                   <textarea
                     value={drafts[m.id] || ''}
                     onChange={(e) => setDrafts((d) => ({ ...d, [m.id]: e.target.value }))}
                     rows={4}
+                    maxLength={20000}
                     placeholder="Paste your deliverable / summary of work here…"
                     className="w-full rounded-xl border border-gray-700 bg-gray-950 px-4 py-3 text-sm text-white placeholder:text-gray-600 focus:border-indigo-500 focus:outline-none"
                   />
-                  <button
-                    onClick={() => submitMilestone(m.id)}
-                    disabled={submitting === m.id || !(drafts[m.id] || '').trim()}
-                    className="rounded-xl bg-indigo-600 px-5 py-2.5 font-semibold text-white hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
+                  <button onClick={() => submitMilestone(m.id)} disabled={submitting === m.id || (drafts[m.id] || '').length < 10} className="rounded-xl bg-indigo-600 px-5 py-2.5 font-semibold text-white hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed">
                     {submitting === m.id ? 'Submitting…' : 'Submit Deliverable'}
                   </button>
                 </div>
               )}
-
               {(m.status === 'submitted' || m.status === 'approved' || m.status === 'needs-revision') && (
                 <div className="mt-4">
                   <AIVerifier milestoneId={m.id} milestoneAmount={m.amount} onResult={handleVerified} />

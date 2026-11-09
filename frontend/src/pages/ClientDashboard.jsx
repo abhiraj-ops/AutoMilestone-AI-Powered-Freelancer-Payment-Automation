@@ -1,21 +1,14 @@
 import { useEffect, useState } from 'react';
-import axios from 'axios';
+import api from '../lib/api';
 import CreateProject from '../components/CreateProject';
 import MilestoneCard from '../components/MilestoneCard';
 import PayButton from '../components/PayButton';
 import { useToast, ToastList } from '../hooks/useToast';
 
-const API = import.meta.env.VITE_API_URL || '';
-
 function statusBadge(status) {
   const map = {
     draft: 'bg-gray-700 text-gray-200',
     active: 'bg-indigo-900/50 text-indigo-300 border border-indigo-700/50',
-    pending: 'bg-gray-800 text-gray-300 border border-gray-700',
-    submitted: 'bg-yellow-900/40 text-yellow-300 border border-yellow-700/40',
-    approved: 'bg-emerald-900/40 text-emerald-300 border border-emerald-700/40',
-    'needs-revision': 'bg-red-900/30 text-red-300 border border-red-700/40',
-    paid: 'bg-emerald-600 text-white',
   };
   return `inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${map[status] || 'bg-gray-800 text-gray-300'}`;
 }
@@ -29,8 +22,8 @@ export default function ClientDashboard() {
   async function fetchProjects() {
     setLoading(true);
     try {
-      const res = await axios.get(`${API}/api/projects`);
-      setProjects(res.data || []);
+      const res = await api.get('/api/projects?limit=50');
+      setProjects(Array.isArray(res.data) ? res.data : []);
     } catch (e) {
       toast(e?.response?.data?.error || 'Failed to load projects.');
     } finally {
@@ -51,12 +44,10 @@ export default function ClientDashboard() {
       <ToastList toasts={toasts} onDismiss={dismiss} />
       <h1 className="text-2xl font-bold text-white">Client Dashboard</h1>
       <p className="mt-1 text-sm text-gray-400">Create a milestone-funded project, fund it via PayPal, and watch AI verify submissions.</p>
-
       <div className="mt-8 grid lg:grid-cols-5 gap-6">
         <div className="lg:col-span-2">
           <CreateProject onCreated={handleCreated} />
         </div>
-
         <div className="lg:col-span-3 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-white">All Projects ({projects.length})</h2>
@@ -64,7 +55,6 @@ export default function ClientDashboard() {
               {loading ? 'Refreshing…' : '↻ Refresh'}
             </button>
           </div>
-
           {loading ? (
             <div className="space-y-3">
               {[1, 2, 3].map((i) => (
@@ -94,7 +84,6 @@ export default function ClientDashboard() {
                       <span className="text-gray-500">{isOpen ? '▾' : '▸'}</span>
                     </div>
                   </button>
-
                   {isOpen && (
                     <div className="border-t border-gray-800 px-5 py-4 space-y-4">
                       <p className="text-sm text-gray-300 whitespace-pre-wrap">{p.description}</p>

@@ -72,10 +72,10 @@ automilestone/
 
 ## Tech stack
 
-- **Backend:** Node.js 18+ · Express 4 · `better-sqlite3` · `cors` · `dotenv` · `uuid` · `axios` (optional)
+- **Backend:** Node.js 18+ · Express 4 · `better-sqlite3` · `cors` · `helmet` · `express-rate-limit` · `express-validator` · `dotenv` · `uuid`
 - **Frontend:** React 18 · Vite · React Router v6 · Tailwind CSS v3 · `@paypal/react-paypal-js`
 - **AI:** Google Gemini 2.0 Flash (`@google/generative-ai`), model `gemini-2.0-flash`, raw-JSON-only prompt.
-- **Payments:** PayPal Orders API + Payouts API (Sandbox), native `fetch`, Basic OAuth + Bearer.
+- **Payments:** PayPal Orders API + Payouts API (Sandbox), native `fetch` + timeout, token cache, OAuth + Bearer.
 
 ## Setup
 
@@ -150,7 +150,7 @@ Gemini is instructed to return **raw JSON only** (no markdown fences). `geminiSe
 ### PayPal notes (Sandbox)
 
 - All PayPal hosts are hard-coded to `api-m.sandbox.paypal.com` as specified.
-- `getAccessToken()` caches per-process (no cache yet — fine for demo, add in-memory cache for prod).
+- `getAccessToken()` is cached in-memory with TTL (respects `expires_in`).
 - Payouts require the PayPal app to have Payouts enabled; receiver email must be a confirmed Sandbox personal account.
 - In production, switch hosts to `api-m.paypal.com` and set `PAYPAL_ENV=live`.
 
@@ -178,11 +178,16 @@ Gemini is instructed to return **raw JSON only** (no markdown fences). `geminiSe
 
 ## Security / prod hardening
 
-- Move `.env` keys to secret manager; never commit `.env` (already `.gitignore`d).
-- Add rate limiting + input sanitization (current scaffold trusts the demo inputs).
-- Cache `getAccessToken()` with TTL; add idempotency keys on payout retries.
-- Serve backend behind HTTPS in production; webhook signature verification (PayPal `VERIFY_WEBHOOK_SIGNATURE`) is not in the demo scope.
-- SQLite is single-instance by design; swap `better-sqlite3` calls for Postgres if you need multi-instance.
+See [`SECURITY.md`](SECURITY.md) for full policy. Summary:
+
+- **Headers:** `helmet` + CSP (PayPal-safe) · **CORS allowlist** · **256kb body cap**
+- **Rate limits:** general 600/15m · writes 30/min · verify/paypal 10/min
+- **Validation:** `express-validator` — UUIDs, emails, length/amount caps, milestone caps, HTML-escaped
+- **Idempotency:** already-paid → `409`; verify+pay in transaction
+- **Webhooks:** signature verified via PayPal (needs `PAYPAL_WEBHOOK_ID`); prod rejects unverified
+- **Services:** 15s PayPal timeout, 30s Gemini race, prompt marked as untrusted data, logs redacted
+- **API key gate:** optional `API_KEY` header (`X-API-Key`) — set in production; frontend sends `VITE_API_KEY`
+- **Secrets:** `.env` gitignored; prod startup fails fast if keys missing; `npm audit` clean
 
 ## License
 

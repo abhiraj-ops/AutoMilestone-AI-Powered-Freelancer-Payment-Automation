@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import axios from 'axios';
+import api from '../lib/api';
 import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
 
-const API = import.meta.env.VITE_API_URL || '';
 const clientId = import.meta.env.VITE_PAYPAL_CLIENT_ID;
 
 export default function PayButton({ amount, projectId, onSuccess }) {
@@ -20,43 +19,34 @@ export default function PayButton({ amount, projectId, onSuccess }) {
 
   async function createOrderHandler() {
     setError(null);
-    const res = await axios.post(`${API}/api/paypal/create-order`, { amount, projectId });
+    const res = await api.post('/api/paypal/create-order', { amount, projectId });
+    if (!res.data || !res.data.id) throw new Error('Failed to create order');
     return res.data.id;
   }
 
   async function onApproveHandler(data) {
     setProcessing(true);
     try {
-      const res = await axios.post(`${API}/api/paypal/capture-order`, { orderID: data.orderID, projectId });
-      if (res.data) {
-        setCaptured(true);
-        if (onSuccess) onSuccess(res.data);
-      }
+      await api.post('/api/paypal/capture-order', { orderID: data.orderID, projectId });
+      setCaptured(true);
+      if (onSuccess) onSuccess();
     } catch (err) {
-      setError(err?.response?.data?.error || 'Capture failed.');
+      setError(err?.response?.data?.error || 'Capture failed. Please try again.');
     } finally {
       setProcessing(false);
     }
   }
 
-  function onErrorHandler(err) {
-    console.error('[PayPal]', err);
-    setError(err?.message || 'PayPal error. Please try again.');
+  function onErrorHandler() {
+    setError('PayPal error. Please try again.');
   }
 
-  if (captured) {
-    return <p className="text-sm font-semibold text-emerald-400">✓ Project funded &amp; active via PayPal.</p>;
-  }
+  if (captured) return <p className="text-sm font-semibold text-emerald-400">✓ Project funded &amp; active via PayPal.</p>;
 
   return (
     <div>
       <PayPalScriptProvider options={{ clientId, currency: 'USD', intent: 'capture' }}>
-        <PayPalButtons
-          style={{ layout: 'horizontal', label: 'pay' }}
-          createOrder={createOrderHandler}
-          onApprove={onApproveHandler}
-          onError={onErrorHandler}
-        />
+        <PayPalButtons style={{ layout: 'horizontal', label: 'pay' }} createOrder={createOrderHandler} onApprove={onApproveHandler} onError={onErrorHandler} />
       </PayPalScriptProvider>
       {processing && <p className="mt-2 text-xs text-gray-400 animate-pulse">Capturing payment…</p>}
       {error && <p className="mt-2 text-xs text-red-400">{error}</p>}

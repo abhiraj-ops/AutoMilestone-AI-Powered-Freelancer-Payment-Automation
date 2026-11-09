@@ -9,6 +9,8 @@ fs.mkdirSync(dbDir, { recursive: true });
 const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
+db.pragma('busy_timeout = 5000');
+db.pragma('synchronous = NORMAL');
 
 const schemaPath = path.join(__dirname, 'schema.sql');
 if (fs.existsSync(schemaPath)) {

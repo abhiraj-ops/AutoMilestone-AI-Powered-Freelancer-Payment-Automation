@@ -1,7 +1,5 @@
 import { useState } from 'react';
-import axios from 'axios';
-
-const API = import.meta.env.VITE_API_URL || '';
+import api from '../lib/api';
 
 export default function AIVerifier({ milestoneId, milestoneAmount, onResult }) {
   const [state, setState] = useState('idle');
@@ -10,29 +8,22 @@ export default function AIVerifier({ milestoneId, milestoneAmount, onResult }) {
   const [flash, setFlash] = useState(false);
 
   async function runVerification() {
+    if (state === 'loading') return;
     setState('loading');
     setError(null);
     try {
-      const res = await axios.post(`${API}/api/verify-milestone/${milestoneId}`);
+      const res = await api.post(`/api/verify-milestone/${encodeURIComponent(milestoneId)}`, {}, { timeout: 35000 });
       const data = res.data;
       setResult(data);
-
       if (data.payout_triggered) {
         setFlash(true);
         setTimeout(() => setFlash(false), 1200);
       }
-
-      if (data.approved) {
-        setState('approved');
-      } else {
-        setState('rejected');
-      }
-
-      if (onResult && data.milestone) {
-        onResult(data.milestone);
-      }
+      if (data.approved) setState('approved');
+      else setState('rejected');
+      if (onResult && data.milestone) onResult(data.milestone);
     } catch (err) {
-      const message = err?.response?.data?.error || err.message || 'Verification failed.';
+      const message = err?.response?.data?.error || 'Verification failed. Please try again.';
       setError(message);
       setState('idle');
     }
@@ -63,9 +54,7 @@ export default function AIVerifier({ milestoneId, milestoneAmount, onResult }) {
             💸 PayPal Payout Sent! ${Number(milestoneAmount).toFixed(2)}
           </p>
         )}
-        {result.payout_error && (
-          <p className="mt-2 text-xs text-red-300">Payout error: {result.payout_error}</p>
-        )}
+        {result.payout_error && <p className="mt-2 text-xs text-red-300">{result.payout_error}</p>}
         <button onClick={reset} className="mt-3 text-xs font-medium text-emerald-300 hover:text-emerald-200 underline">Reset</button>
       </div>
     );
@@ -80,9 +69,7 @@ export default function AIVerifier({ milestoneId, milestoneAmount, onResult }) {
           <div className="mt-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Missing items</p>
             <ul className="mt-1 list-disc pl-5 text-sm text-gray-300 space-y-1">
-              {result.missing.map((item, i) => (
-                <li key={i}>{item}</li>
-              ))}
+              {result.missing.map((item, i) => <li key={i}>{item}</li>)}
             </ul>
           </div>
         )}
@@ -95,10 +82,7 @@ export default function AIVerifier({ milestoneId, milestoneAmount, onResult }) {
 
   return (
     <div>
-      <button
-        onClick={runVerification}
-        className="rounded-xl bg-indigo-600 px-5 py-2.5 font-semibold text-white hover:bg-indigo-500 transition"
-      >
+      <button onClick={runVerification} className="rounded-xl bg-indigo-600 px-5 py-2.5 font-semibold text-white hover:bg-indigo-500 transition">
         🤖 Run AI Verification
       </button>
       {error && <p className="mt-2 text-xs text-red-400">{error}</p>}

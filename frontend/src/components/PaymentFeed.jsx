@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
-import axios from 'axios';
-
-const API = import.meta.env.VITE_API_URL || '';
+import api from '../lib/api';
 
 export default function PaymentFeed() {
   const [payments, setPayments] = useState([]);
@@ -10,8 +8,8 @@ export default function PaymentFeed() {
 
   async function fetchPayments() {
     try {
-      const res = await axios.get(`${API}/api/payments`);
-      setPayments(res.data || []);
+      const res = await api.get('/api/payments?limit=25');
+      setPayments(Array.isArray(res.data) ? res.data.slice(0, 25) : []);
       setError(null);
     } catch (e) {
       setError(e?.response?.data?.error || 'Failed to load payments.');
@@ -36,9 +34,7 @@ export default function PaymentFeed() {
         <h2 className="font-bold text-white">Live Payment Feed</h2>
         <span className="ml-auto text-xs text-gray-500">Updates every 10s</span>
       </div>
-
       {error && <p className="mt-3 text-xs text-red-400">{error}</p>}
-
       {loading ? (
         <div className="mt-4 space-y-3">
           {[1, 2, 3].map((i) => (
